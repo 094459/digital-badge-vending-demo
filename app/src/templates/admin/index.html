@@ -1,0 +1,1776 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Digital Badge Platform{% endblock %}
+
+{% block extra_css %}
+<style>
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+    }
+    
+    .modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 2rem;
+        border: 1px solid #888;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #eee;
+    }
+    
+    .modal-header h2 {
+        margin: 0;
+    }
+    
+    .close {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+        line-height: 1;
+    }
+    
+    .close:hover,
+    .close:focus {
+        color: #000;
+    }
+    
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    
+    .modal-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid #eee;
+    }
+    
+    .color-input-group {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .color-input-group input[type="color"] {
+        width: 60px;
+        height: 40px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .color-input-group input[type="text"] {
+        flex: 1;
+    }
+    
+    .editor-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        align-items: start;
+    }
+    
+    .preview-section {
+        position: sticky;
+        top: 2rem;
+        align-self: start;
+    }
+    
+    .preview-container {
+        background: #f5f5f5;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .preview-container h3 {
+        margin-bottom: 1rem;
+        font-size: 1rem;
+        color: #666;
+    }
+    
+    #badgePreview {
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        max-width: 100%;
+        height: auto;
+    }
+    
+    @media (max-width: 768px) {
+        .editor-layout {
+            grid-template-columns: 1fr;
+        }
+        
+        .preview-section {
+            position: static;
+        }
+    }
+    
+    /* Image preview on hover */
+    .image-preview-popup {
+        display: none;
+        position: fixed;
+        z-index: 2000;
+        background: white;
+        border: 2px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        max-width: 600px;
+        max-height: 600px;
+        pointer-events: none;
+    }
+    
+    .image-preview-popup img {
+        max-width: 100%;
+        max-height: 100%;
+        display: block;
+        border-radius: 4px;
+    }
+    
+    .resource-thumbnail {
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .resource-thumbnail:hover {
+        transform: scale(1.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Image preview popup -->
+<div id="imagePreviewPopup" class="image-preview-popup">
+    <img id="imagePreviewImg" src="" alt="Preview">
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2>Admin Dashboard</h2>
+        <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-success" onclick="exportApplication()">
+                📦 Backup System
+            </button>
+            <button class="btn" onclick="document.getElementById('importFile').click()">
+                📥 Restore from Backup file
+            </button>
+            <input type="file" id="importFile" accept=".zip" style="display: none;" onchange="importApplication(this)">
+        </div>
+    </div>
+    <p style="color: #666; margin-bottom: 2rem;">
+        Export/Import allows you to backup and transfer templates, resources, and files between systems. Issued badges are not included.
+    </p>
+    
+    <h3>Templates</h3>
+    <button class="btn" onclick="showCreateTemplate()">Create New Template</button>
+    
+    <table style="margin-top: 1rem;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Default</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="templatesList">
+            {% for template in templates %}
+            <tr>
+                <td>{{ template.id }}</td>
+                <td>{{ template.name }}</td>
+                <td>{{ template.description }}</td>
+                <td>{{ 'Yes' if template.is_default else 'No' }}</td>
+                <td>
+                    <button class="btn" onclick="editTemplate({{ template.id }})">Edit</button>
+                    {% if not template.is_default %}
+                    <button class="btn btn-danger" onclick="deleteTemplate({{ template.id }})">Delete</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h3>Resources</h3>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">Upload Resource</label>
+            <input type="file" id="file" name="file" required>
+        </div>
+        <div class="form-group">
+            <label for="resource_name">Name</label>
+            <input type="text" id="resource_name" name="name" required>
+        </div>
+        <div class="form-group">
+            <label for="resource_type">Type</label>
+            <select id="resource_type" name="resource_type">
+                <option value="logo">Logo</option>
+                <option value="background">Background</option>
+                <option value="icon">Icon</option>
+                <option value="image">Image</option>
+                <option value="frame">Frame</option>
+                <option value="ai_generated">AI Generated</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-success">Upload</button>
+    </form>
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; margin-bottom: 1rem;">
+        <div>
+            <button class="btn btn-danger" id="deleteSelectedBtn" onclick="deleteSelectedResources()" disabled>
+                Delete Selected (<span id="selectedCount">0</span>)
+            </button>
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <label for="resourcesPerPage" style="margin: 0;">Show:</label>
+            <select id="resourcesPerPage" onchange="changeResourcesPerPage()" style="padding: 0.5rem;">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </div>
+    </div>
+    
+    <table style="margin-top: 1rem;">
+        <thead>
+            <tr>
+                <th style="width: 40px;">
+                    <input type="checkbox" id="selectAllResources" onchange="toggleSelectAllResources()">
+                </th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Preview</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="resourcesList">
+            <!-- Resources will be populated by JavaScript -->
+        </tbody>
+    </table>
+    
+    <div id="resourcesPagination" style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+        <!-- Pagination will be populated by JavaScript -->
+    </div>
+</div>
+
+<script>
+// Resources pagination state
+let currentResourcesPage = 1;
+let resourcesPerPage = 20;
+let allResources = {{ resources_json | tojson }};
+
+function renderResources() {
+    const start = (currentResourcesPage - 1) * resourcesPerPage;
+    const end = start + resourcesPerPage;
+    const pageResources = allResources.slice(start, end);
+    
+    const tbody = document.getElementById('resourcesList');
+    tbody.innerHTML = '';
+    
+    pageResources.forEach(resource => {
+        const tr = document.createElement('tr');
+        
+        // Checkbox
+        const tdCheckbox = document.createElement('td');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'resource-checkbox';
+        checkbox.value = resource.id;
+        checkbox.onchange = updateSelectedCount;
+        tdCheckbox.appendChild(checkbox);
+        tr.appendChild(tdCheckbox);
+        
+        // ID
+        const tdId = document.createElement('td');
+        tdId.textContent = resource.id;
+        tr.appendChild(tdId);
+        
+        // Name
+        const tdName = document.createElement('td');
+        tdName.textContent = resource.name;
+        tr.appendChild(tdName);
+        
+        // Type
+        const tdType = document.createElement('td');
+        const typeColors = {
+            'ai_generated': '#e3f2fd',
+            'frame': '#fce4ec',
+            'logo': '#fff3e0',
+            'background': '#f3e5f5',
+            'default': '#e8f5e9'
+        };
+        const bgColor = typeColors[resource.resource_type] || typeColors.default;
+        tdType.innerHTML = `<span style="display: inline-block; padding: 0.25rem 0.5rem; background: ${bgColor}; border-radius: 4px; font-size: 0.875rem;">${resource.resource_type}</span>`;
+        tr.appendChild(tdType);
+        
+        // Description
+        const tdDesc = document.createElement('td');
+        if (resource.description) {
+            const maxLen = 80;
+            const shortDesc = resource.description.length > maxLen ? resource.description.substring(0, maxLen) + '...' : resource.description;
+            tdDesc.innerHTML = `<div style="max-width: 300px; color: #666; font-size: 0.875rem;" title="${resource.description}">${shortDesc}</div>`;
+        } else {
+            tdDesc.innerHTML = '<span style="color: #999; font-size: 0.875rem;">—</span>';
+        }
+        tr.appendChild(tdDesc);
+        
+        // Preview
+        const tdPreview = document.createElement('td');
+        const img = document.createElement('img');
+        img.src = resource.file_path;
+        img.className = 'resource-thumbnail';
+        img.style.cssText = 'max-width: 100px; max-height: 50px; border: 1px solid #ddd; border-radius: 4px;';
+        img.onmouseenter = (e) => showImagePreview(e, resource.file_path);
+        img.onmousemove = (e) => moveImagePreview(e);
+        img.onmouseleave = hideImagePreview;
+        tdPreview.appendChild(img);
+        tr.appendChild(tdPreview);
+        
+        // Actions
+        const tdActions = document.createElement('td');
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-danger';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.onclick = () => deleteResource(resource.id);
+        tdActions.appendChild(deleteBtn);
+        tr.appendChild(tdActions);
+        
+        tbody.appendChild(tr);
+    });
+    
+    renderResourcesPagination();
+    updateSelectedCount();
+}
+
+function renderResourcesPagination() {
+    const totalPages = Math.ceil(allResources.length / resourcesPerPage);
+    const pagination = document.getElementById('resourcesPagination');
+    pagination.innerHTML = '';
+    
+    if (totalPages <= 1) return;
+    
+    // Previous button
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'btn';
+    prevBtn.textContent = '← Previous';
+    prevBtn.disabled = currentResourcesPage === 1;
+    prevBtn.onclick = () => {
+        if (currentResourcesPage > 1) {
+            currentResourcesPage--;
+            renderResources();
+        }
+    };
+    pagination.appendChild(prevBtn);
+    
+    // Page info
+    const pageInfo = document.createElement('span');
+    pageInfo.style.padding = '0 1rem';
+    pageInfo.textContent = `Page ${currentResourcesPage} of ${totalPages}`;
+    pagination.appendChild(pageInfo);
+    
+    // Next button
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'btn';
+    nextBtn.textContent = 'Next →';
+    nextBtn.disabled = currentResourcesPage === totalPages;
+    nextBtn.onclick = () => {
+        if (currentResourcesPage < totalPages) {
+            currentResourcesPage++;
+            renderResources();
+        }
+    };
+    pagination.appendChild(nextBtn);
+}
+
+function changeResourcesPerPage() {
+    resourcesPerPage = parseInt(document.getElementById('resourcesPerPage').value);
+    currentResourcesPage = 1;
+    renderResources();
+}
+
+function toggleSelectAllResources() {
+    const selectAll = document.getElementById('selectAllResources');
+    const checkboxes = document.querySelectorAll('.resource-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.resource-checkbox:checked');
+    const count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('deleteSelectedBtn').disabled = count === 0;
+    
+    // Update select all checkbox state
+    const allCheckboxes = document.querySelectorAll('.resource-checkbox');
+    const selectAll = document.getElementById('selectAllResources');
+    selectAll.checked = allCheckboxes.length > 0 && count === allCheckboxes.length;
+}
+
+async function deleteSelectedResources() {
+    const checkboxes = document.querySelectorAll('.resource-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (ids.length === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${ids.length} resource(s)?`)) {
+        return;
+    }
+    
+    try {
+        const deletePromises = ids.map(id => 
+            fetch(`/admin/resources/${id}`, { method: 'DELETE' })
+        );
+        
+        await Promise.all(deletePromises);
+        
+        // Remove deleted resources from local array
+        allResources = allResources.filter(r => !ids.includes(r.id));
+        
+        // Adjust page if needed
+        const totalPages = Math.ceil(allResources.length / resourcesPerPage);
+        if (currentResourcesPage > totalPages && totalPages > 0) {
+            currentResourcesPage = totalPages;
+        }
+        
+        renderResources();
+        alert(`Successfully deleted ${ids.length} resource(s)`);
+    } catch (error) {
+        alert('Error deleting resources: ' + error.message);
+    }
+}
+
+// Initialize resources display
+renderResources();
+
+// Image preview functions
+function showImagePreview(event, imagePath) {
+    const popup = document.getElementById('imagePreviewPopup');
+    const img = document.getElementById('imagePreviewImg');
+    img.src = imagePath;
+    popup.style.display = 'block';
+    moveImagePreview(event);
+}
+
+function moveImagePreview(event) {
+    const popup = document.getElementById('imagePreviewPopup');
+    const offset = 20;
+    
+    // Position the popup near the cursor
+    let left = event.clientX + offset;
+    let top = event.clientY + offset;
+    
+    // Adjust if popup would go off screen
+    const popupRect = popup.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    if (left + popupRect.width > viewportWidth) {
+        left = event.clientX - popupRect.width - offset;
+    }
+    
+    if (top + popupRect.height > viewportHeight) {
+        top = event.clientY - popupRect.height - offset;
+    }
+    
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+}
+
+function hideImagePreview() {
+    const popup = document.getElementById('imagePreviewPopup');
+    popup.style.display = 'none';
+}
+</script>
+
+<div class="card">
+    <h3>AI Badge Generator</h3>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Generate badge designs using AI. Generated images are automatically saved as resources and can be used in templates.
+    </p>
+    <form id="aiGenerateForm">
+        <div class="form-group">
+            <label for="ai_prompt">Describe your badge design</label>
+            <textarea id="ai_prompt" name="prompt" placeholder="e.g., A professional certificate badge with gold borders and a star in the center" required></textarea>
+        </div>
+        <div class="form-group">
+            <label for="badge_style">Art Style (Optional)</label>
+            <select id="badge_style" name="style">
+                <option value="">None - Use prompt only</option>
+                <option value="photographic style">Photographic - Realistic, photo-like</option>
+                <option value="cinematic style">Cinematic - Movie-quality, dramatic</option>
+                <option value="digital art style">Digital Art - Modern digital illustration</option>
+                <option value="watercolor painting style">Watercolor - Soft, artistic painting</option>
+                <option value="oil painting style">Oil Painting - Classic painted look</option>
+                <option value="minimalist style">Minimalist - Clean, simple design</option>
+                <option value="vintage style">Vintage - Retro, classic appearance</option>
+                <option value="modern flat design style">Flat Design - Modern, geometric</option>
+            </select>
+            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                Style will be added to your prompt. Leave as "None" to use only your description.
+            </small>
+        </div>
+        <button type="submit" class="btn btn-success">Generate with AI</button>
+    </form>
+    
+    <div id="aiResult" style="margin-top: 1rem; display: none;">
+        <h4>Generated Design:</h4>
+        <img id="aiImage" src="" style="max-width: 400px; border: 1px solid #ddd; border-radius: 4px;">
+        <p style="margin-top: 0.5rem; color: #27ae60;">
+            ✓ Saved as resource - will appear in resources list after page reload
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <h3>AI Frame Generator</h3>
+    <p style="color: #666; margin-bottom: 1rem;">
+        Generate decorative frames/borders for badges. The center will be transparent so your badge content shows through.
+        Frames are saved as resources and can be applied to templates.
+    </p>
+    <form id="aiFrameForm">
+        <div class="form-group">
+            <label for="frame_prompt">Describe the frame style</label>
+            <textarea id="frame_prompt" name="prompt" placeholder="e.g., An elegant gold ornate frame with decorative corners, or A modern minimalist border with rounded corners, or A certificate-style border with ribbon accents" required></textarea>
+            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                Tip: Focus on describing the border/frame style. The center will automatically be made transparent.
+            </small>
+        </div>
+        <div class="form-group">
+            <label for="frame_style">Art Style (Optional)</label>
+            <select id="frame_style" name="style">
+                <option value="">None - Use prompt only</option>
+                <option value="photographic style">Photographic - Realistic, photo-like</option>
+                <option value="cinematic style">Cinematic - Movie-quality, dramatic</option>
+                <option value="digital art style">Digital Art - Modern digital illustration</option>
+                <option value="watercolor painting style">Watercolor - Soft, artistic painting</option>
+                <option value="oil painting style">Oil Painting - Classic painted look</option>
+                <option value="minimalist style">Minimalist - Clean, simple design</option>
+                <option value="vintage style">Vintage - Retro, classic appearance</option>
+                <option value="modern flat design style">Flat Design - Modern, geometric</option>
+            </select>
+            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                Style will be added to your prompt. Leave as "None" to use only your description.
+            </small>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="frame_width">Frame Width (px)</label>
+                <select id="frame_width" name="width" required>
+                    <option value="1024" selected>1024</option>
+                    <option value="1152">1152</option>
+                    <option value="1173">1173</option>
+                    <option value="1216">1216</option>
+                    <option value="1344">1344</option>
+                    <option value="1536">1536</option>
+                </select>
+                <small style="color: #666; display: block; margin-top: 0.25rem;">
+                    Nova Canvas supported dimensions
+                </small>
+            </div>
+            <div class="form-group">
+                <label for="frame_height">Frame Height (px)</label>
+                <select id="frame_height" name="height" required>
+                    <option value="1024" selected>1024</option>
+                    <option value="1152">1152</option>
+                    <option value="1173">1173</option>
+                    <option value="1216">1216</option>
+                    <option value="1344">1344</option>
+                    <option value="1536">1536</option>
+                </select>
+                <small style="color: #666; display: block; margin-top: 0.25rem;">
+                    Nova Canvas supported dimensions
+                </small>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success">Generate Frame with AI</button>
+    </form>
+    
+    <div id="frameResult" style="margin-top: 1rem; display: none;">
+        <h4>Generated Frame:</h4>
+        <div style="background: repeating-linear-gradient(45deg, #f0f0f0, #f0f0f0 10px, #e0e0e0 10px, #e0e0e0 20px); padding: 1rem; border-radius: 4px;">
+            <img id="frameImage" src="" style="max-width: 400px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <p style="margin-top: 0.5rem; color: #27ae60;">
+            ✓ Saved as frame resource with transparent center - will appear in resources list after page reload
+        </p>
+    </div>
+</div>
+
+<!-- Template Editor Modal -->
+<div id="templateModal" class="modal">
+    <div class="modal-content" style="max-width: 1000px;">
+        <div class="modal-header">
+            <h2 id="modalTitle">Edit Template</h2>
+            <button class="close" onclick="closeTemplateModal()">&times;</button>
+        </div>
+        
+        <div class="editor-layout">
+            <!-- Form Section -->
+            <div>
+                <form id="templateForm">
+                    <input type="hidden" id="template_id" name="template_id">
+                    
+                    <div class="form-group">
+                        <label for="template_name">Template Name *</label>
+                        <input type="text" id="template_name" name="name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_description">Description</label>
+                        <textarea id="template_description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Layout Configuration</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_width">Width (px) *</label>
+                            <input type="number" id="template_width" name="width" required min="100" max="2000" value="800">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_height">Height (px) *</label>
+                            <input type="number" id="template_height" name="height" required min="100" max="2000" value="600">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_bg_color">Background Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="template_bg_color_picker" value="#FFFFFF">
+                            <input type="text" id="template_bg_color" name="background_color" value="#FFFFFF" pattern="#[0-9A-Fa-f]{6}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_text_color">Text Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="template_text_color_picker" value="#000000">
+                            <input type="text" id="template_text_color" name="text_color" value="#000000" pattern="#[0-9A-Fa-f]{6}">
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Text Position</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_name_x">Name X Position (px) *</label>
+                            <input type="number" id="template_name_x" name="name_x" required min="0" value="400">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_name_y">Name Y Position (px) *</label>
+                            <input type="number" id="template_name_y" name="name_y" required min="0" value="300">
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Badge Title (Optional)</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_title_text">Title Text</label>
+                        <input type="text" id="template_title_text" name="title_text" placeholder="e.g., Certificate of Achievement">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Leave blank if you don't want a title on the badge
+                        </small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_title_x">Title X Position (px)</label>
+                            <input type="number" id="template_title_x" name="title_x" min="0" value="400">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_title_y">Title Y Position (px)</label>
+                            <input type="number" id="template_title_y" name="title_y" min="0" value="100">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_title_size">Title Font Size (px)</label>
+                            <input type="number" id="template_title_size" name="title_size" min="8" max="200" value="36">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_title_color">Title Color</label>
+                            <div class="color-input-group">
+                                <input type="color" id="template_title_color_picker" value="#000000">
+                                <input type="text" id="template_title_color" name="title_color" value="#000000" pattern="#[0-9A-Fa-f]{6}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Badge Subtitle (Optional)</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_subtitle_text">Subtitle Text</label>
+                        <input type="text" id="template_subtitle_text" name="subtitle_text" placeholder="e.g., Awarded for Excellence">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Leave blank if you don't want a subtitle on the badge
+                        </small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_subtitle_x">Subtitle X Position (px)</label>
+                            <input type="number" id="template_subtitle_x" name="subtitle_x" min="0" value="400">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_subtitle_y">Subtitle Y Position (px)</label>
+                            <input type="number" id="template_subtitle_y" name="subtitle_y" min="0" value="500">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_subtitle_size">Subtitle Font Size (px)</label>
+                            <input type="number" id="template_subtitle_size" name="subtitle_size" min="8" max="200" value="24">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_subtitle_color">Subtitle Color</label>
+                            <div class="color-input-group">
+                                <input type="color" id="template_subtitle_color_picker" value="#666666">
+                                <input type="text" id="template_subtitle_color" name="subtitle_color" value="#666666" pattern="#[0-9A-Fa-f]{6}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Badge Message (Optional)</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_message_text">Message Text</label>
+                        <textarea id="template_message_text" name="message_text" rows="3" placeholder="e.g., This badge recognizes outstanding achievement and dedication to excellence in the field."></textarea>
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Multi-line message text. Leave blank if not needed.
+                        </small>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_message_x">Message X Position (px)</label>
+                            <input type="number" id="template_message_x" name="message_x" min="0" value="400">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_message_y">Message Y Position (px)</label>
+                            <input type="number" id="template_message_y" name="message_y" min="0" value="550">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template_message_size">Message Font Size (px)</label>
+                            <input type="number" id="template_message_size" name="message_size" min="8" max="200" value="16">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_message_color">Message Color</label>
+                            <div class="color-input-group">
+                                <input type="color" id="template_message_color_picker" value="#666666">
+                                <input type="text" id="template_message_color" name="message_color" value="#666666" pattern="#[0-9A-Fa-f]{6}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_message_width">Message Max Width (px)</label>
+                        <input type="number" id="template_message_width" name="message_width" min="100" max="2000" value="600">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Maximum width for text wrapping
+                        </small>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Typography</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_font_family">Font Family</label>
+                        <select id="template_font_family" name="font_family" onchange="updateBadgePreview()">
+                            <option value="Arial">Arial</option>
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Courier New">Courier New</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="Trebuchet MS">Trebuchet MS</option>
+                            <option value="Impact">Impact</option>
+                            <option value="Comic Sans MS">Comic Sans MS</option>
+                            <option value="Palatino">Palatino</option>
+                        </select>
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Applies to all text on the badge
+                        </small>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Background Image (Optional)</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_bg_image">Background Image</label>
+                        <select id="template_bg_image" name="background_image">
+                            <option value="">None (use solid color)</option>
+                            {% for resource in resources %}
+                            {% if resource.resource_type == 'ai_generated' %}
+                            <option value="{{ resource.file_path }}">{{ resource.name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Only AI-generated badge designs are shown. Generate more using the AI Badge Generator above.
+                        </small>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Logo/Overlay Images (Optional)</h3>
+                    
+                    <div id="overlayImages">
+                        <button type="button" class="btn" onclick="addOverlayImage()">Add Image</button>
+                        <div id="overlayImagesList"></div>
+                    </div>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Frame/Border (Optional)</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_frame">Frame</label>
+                        <select id="template_frame" name="frame" onchange="updateBadgePreview()">
+                            <option value="">None</option>
+                            {% for resource in resources %}
+                            {% if resource.resource_type == 'frame' %}
+                            <option value="{{ resource.file_path }}">{{ resource.name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Frames are overlaid on top of the badge. Generate frames using the AI Frame Generator.
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="template_is_default" name="is_default">
+                            Set as default template
+                        </label>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeTemplateModal()">Cancel</button>
+                        <button type="submit" class="btn btn-success">Save Template</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Preview Section -->
+            <div class="preview-section">
+                <div class="preview-container">
+                    <h3>Preview</h3>
+                    <canvas id="badgePreview" width="800" height="600"></canvas>
+                    <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #666;">
+                        Sample badge with "John Doe"
+                    </p>
+                    
+                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+                        <h4 style="font-size: 0.875rem; margin-bottom: 0.5rem;">Preview URL</h4>
+                        <p style="font-size: 0.75rem; color: #666; margin-bottom: 0.5rem;">
+                            Test how this template looks as a live badge:
+                        </p>
+                        <button type="button" class="btn" onclick="generatePreviewBadge()" id="previewBtn" style="width: 100%; margin-bottom: 0.5rem;">
+                            Generate Preview Badge
+                        </button>
+                        <div id="previewUrlContainer" style="display: none;">
+                            <input type="text" id="previewUrl" readonly style="width: 100%; padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" onclick="this.select()">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <a id="previewLink" href="" target="_blank" class="btn" style="flex: 1; text-align: center; font-size: 0.75rem;">
+                                    Open Preview
+                                </a>
+                                <button type="button" class="btn" onclick="copyPreviewUrl()" style="flex: 1; font-size: 0.75rem;">
+                                    Copy URL
+                                </button>
+                            </div>
+                            <p style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;">
+                                This is a temporary preview badge. Save the template to use it for real badges.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Badge preview function
+function updateBadgePreview() {
+    const canvas = document.getElementById('badgePreview');
+    const ctx = canvas.getContext('2d');
+    
+    // Get values from form
+    const width = parseInt(document.getElementById('template_width').value) || 800;
+    const height = parseInt(document.getElementById('template_height').value) || 600;
+    const bgColor = document.getElementById('template_bg_color').value || '#FFFFFF';
+    const textColor = document.getElementById('template_text_color').value || '#000000';
+    const nameX = parseInt(document.getElementById('template_name_x').value) || 400;
+    const nameY = parseInt(document.getElementById('template_name_y').value) || 300;
+    const bgImagePath = document.getElementById('template_bg_image').value;
+    const framePath = document.getElementById('template_frame').value;
+    
+    // Title and subtitle
+    const titleText = document.getElementById('template_title_text').value;
+    const titleX = parseInt(document.getElementById('template_title_x').value) || 400;
+    const titleY = parseInt(document.getElementById('template_title_y').value) || 100;
+    const titleSize = parseInt(document.getElementById('template_title_size').value) || 36;
+    const titleColor = document.getElementById('template_title_color').value || '#000000';
+    
+    const subtitleText = document.getElementById('template_subtitle_text').value;
+    const subtitleX = parseInt(document.getElementById('template_subtitle_x').value) || 400;
+    const subtitleY = parseInt(document.getElementById('template_subtitle_y').value) || 500;
+    const subtitleSize = parseInt(document.getElementById('template_subtitle_size').value) || 24;
+    const subtitleColor = document.getElementById('template_subtitle_color').value || '#666666';
+    
+    const messageText = document.getElementById('template_message_text').value;
+    const messageX = parseInt(document.getElementById('template_message_x').value) || 400;
+    const messageY = parseInt(document.getElementById('template_message_y').value) || 550;
+    const messageSize = parseInt(document.getElementById('template_message_size').value) || 16;
+    const messageColor = document.getElementById('template_message_color').value || '#666666';
+    const messageWidth = parseInt(document.getElementById('template_message_width').value) || 600;
+    
+    const fontFamily = document.getElementById('template_font_family').value || 'Arial';
+    
+    // Set canvas size
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Scale canvas for display (max 400px wide)
+    const scale = Math.min(400 / width, 1);
+    canvas.style.width = (width * scale) + 'px';
+    canvas.style.height = (height * scale) + 'px';
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Draw background
+    if (bgImagePath) {
+        // Load and draw background image
+        const bgImg = new Image();
+        bgImg.onload = function() {
+            ctx.drawImage(bgImg, 0, 0, width, height);
+            drawOverlaysAndText();
+        };
+        bgImg.onerror = function() {
+            // Fallback to solid color if image fails
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+            drawOverlaysAndText();
+        };
+        bgImg.src = bgImagePath;
+    } else {
+        // Draw solid color background
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, width, height);
+        drawOverlaysAndText();
+    }
+    
+    function drawOverlaysAndText() {
+        // Draw overlay images
+        const overlays = document.querySelectorAll('.overlay-image-item');
+        let loadedCount = 0;
+        const totalOverlays = overlays.length;
+        
+        if (totalOverlays === 0) {
+            drawTextAndFrame();
+        } else {
+            overlays.forEach((overlay, index) => {
+                const imgPath = overlay.querySelector('.overlay-image-select').value;
+                const imgX = parseInt(overlay.querySelector('.overlay-x').value) || 0;
+                const imgY = parseInt(overlay.querySelector('.overlay-y').value) || 0;
+                const imgWidth = parseInt(overlay.querySelector('.overlay-width').value) || 100;
+                const imgHeight = parseInt(overlay.querySelector('.overlay-height').value) || 100;
+                
+                if (imgPath) {
+                    const img = new Image();
+                    img.onload = function() {
+                        ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+                        loadedCount++;
+                        if (loadedCount === totalOverlays) {
+                            drawTextAndFrame();
+                        }
+                    };
+                    img.onerror = function() {
+                        loadedCount++;
+                        if (loadedCount === totalOverlays) {
+                            drawTextAndFrame();
+                        }
+                    };
+                    img.src = imgPath;
+                } else {
+                    loadedCount++;
+                    if (loadedCount === totalOverlays) {
+                        drawTextAndFrame();
+                    }
+                }
+            });
+        }
+    }
+    
+    function drawTextAndFrame() {
+        // Draw title if set
+        if (titleText) {
+            ctx.font = `${titleSize}px ${fontFamily}, sans-serif`;
+            ctx.fillStyle = titleColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(titleText, titleX, titleY);
+            
+            // Draw crosshair for title
+            ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(titleX - 15, titleY);
+            ctx.lineTo(titleX + 15, titleY);
+            ctx.moveTo(titleX, titleY - 15);
+            ctx.lineTo(titleX, titleY + 15);
+            ctx.stroke();
+        }
+        
+        // Draw sample name text
+        const fontSize = 48;
+        ctx.font = `${fontSize}px ${fontFamily}, sans-serif`;
+        ctx.fillStyle = textColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('John Doe', nameX, nameY);
+        
+        // Draw crosshair at name position
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(nameX - 20, nameY);
+        ctx.lineTo(nameX + 20, nameY);
+        ctx.moveTo(nameX, nameY - 20);
+        ctx.lineTo(nameX, nameY + 20);
+        ctx.stroke();
+        
+        // Draw subtitle if set
+        if (subtitleText) {
+            ctx.font = `${subtitleSize}px ${fontFamily}, sans-serif`;
+            ctx.fillStyle = subtitleColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(subtitleText, subtitleX, subtitleY);
+            
+            // Draw crosshair for subtitle
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(subtitleX - 15, subtitleY);
+            ctx.lineTo(subtitleX + 15, subtitleY);
+            ctx.moveTo(subtitleX, subtitleY - 15);
+            ctx.lineTo(subtitleX, subtitleY + 15);
+            ctx.stroke();
+        }
+        
+        // Draw message if set
+        if (messageText) {
+            ctx.font = `${messageSize}px ${fontFamily}, sans-serif`;
+            ctx.fillStyle = messageColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            // Word wrap for message
+            const words = messageText.split(' ');
+            const lines = [];
+            let currentLine = '';
+            
+            for (let word of words) {
+                const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                const metrics = ctx.measureText(testLine);
+                
+                if (metrics.width > messageWidth && currentLine) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (currentLine) {
+                lines.push(currentLine);
+            }
+            
+            // Draw each line
+            const lineHeight = messageSize * 1.2;
+            lines.forEach((line, index) => {
+                ctx.fillText(line, messageX, messageY + (index * lineHeight));
+            });
+            
+            // Draw crosshair for message
+            ctx.strokeStyle = 'rgba(255, 165, 0, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(messageX - 15, messageY);
+            ctx.lineTo(messageX + 15, messageY);
+            ctx.moveTo(messageX, messageY - 15);
+            ctx.lineTo(messageX, messageY + 15);
+            ctx.stroke();
+        }
+        
+        // Draw frame on top if selected
+        if (framePath) {
+            const frameImg = new Image();
+            frameImg.onload = function() {
+                ctx.drawImage(frameImg, 0, 0, width, height);
+            };
+            frameImg.src = framePath;
+        }
+    }
+}
+
+let overlayImageCounter = 0;
+
+function addOverlayImage() {
+    const container = document.getElementById('overlayImagesList');
+    const id = overlayImageCounter++;
+    
+    const overlayHtml = `
+        <div class="overlay-image-item" data-id="${id}" style="border: 1px solid #ddd; padding: 1rem; margin-top: 1rem; border-radius: 4px; position: relative;">
+            <button type="button" class="close" onclick="removeOverlayImage(${id})" style="position: absolute; top: 0.5rem; right: 0.5rem;">&times;</button>
+            <div class="form-group">
+                <label>Image</label>
+                <select class="overlay-image-select" onchange="updateBadgePreview()">
+                    <option value="">Select image...</option>
+                    {% for resource in resources %}
+                    {% if resource.resource_type == 'logo' or resource.resource_type == 'image' %}
+                    <option value="{{ resource.file_path }}">{{ resource.name }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+                <small style="color: #666; display: block; margin-top: 0.25rem;">
+                    Only logos and images are shown. Upload more in the Resources section.
+                </small>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>X Position</label>
+                    <input type="number" class="overlay-x" value="0" min="0" oninput="updateBadgePreview()">
+                </div>
+                <div class="form-group">
+                    <label>Y Position</label>
+                    <input type="number" class="overlay-y" value="0" min="0" oninput="updateBadgePreview()">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Width</label>
+                    <input type="number" class="overlay-width" value="100" min="1" oninput="updateBadgePreview()">
+                </div>
+                <div class="form-group">
+                    <label>Height</label>
+                    <input type="number" class="overlay-height" value="100" min="1" oninput="updateBadgePreview()">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', overlayHtml);
+    updateBadgePreview();
+}
+
+function removeOverlayImage(id) {
+    const item = document.querySelector(`.overlay-image-item[data-id="${id}"]`);
+    if (item) {
+        item.remove();
+        updateBadgePreview();
+    }
+}
+
+// Color picker sync with preview update
+document.getElementById('template_bg_color_picker').addEventListener('input', (e) => {
+    document.getElementById('template_bg_color').value = e.target.value.toUpperCase();
+    updateBadgePreview();
+});
+
+document.getElementById('template_bg_color').addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+        document.getElementById('template_bg_color_picker').value = value;
+    }
+    updateBadgePreview();
+});
+
+document.getElementById('template_text_color_picker').addEventListener('input', (e) => {
+    document.getElementById('template_text_color').value = e.target.value.toUpperCase();
+    updateBadgePreview();
+});
+
+document.getElementById('template_text_color').addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+        document.getElementById('template_text_color_picker').value = value;
+    }
+    updateBadgePreview();
+});
+
+// Title color picker sync
+document.getElementById('template_title_color_picker').addEventListener('input', (e) => {
+    document.getElementById('template_title_color').value = e.target.value.toUpperCase();
+    updateBadgePreview();
+});
+
+document.getElementById('template_title_color').addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+        document.getElementById('template_title_color_picker').value = value;
+    }
+    updateBadgePreview();
+});
+
+// Subtitle color picker sync
+document.getElementById('template_subtitle_color_picker').addEventListener('input', (e) => {
+    document.getElementById('template_subtitle_color').value = e.target.value.toUpperCase();
+    updateBadgePreview();
+});
+
+document.getElementById('template_subtitle_color').addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+        document.getElementById('template_subtitle_color_picker').value = value;
+    }
+    updateBadgePreview();
+});
+
+// Message color picker sync
+document.getElementById('template_message_color_picker').addEventListener('input', (e) => {
+    document.getElementById('template_message_color').value = e.target.value.toUpperCase();
+    updateBadgePreview();
+});
+
+document.getElementById('template_message_color').addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+        document.getElementById('template_message_color_picker').value = value;
+    }
+    updateBadgePreview();
+});
+
+// Update preview when any form field changes
+['template_width', 'template_height', 'template_name_x', 'template_name_y',
+ 'template_title_text', 'template_title_x', 'template_title_y', 'template_title_size',
+ 'template_subtitle_text', 'template_subtitle_x', 'template_subtitle_y', 'template_subtitle_size',
+ 'template_message_text', 'template_message_x', 'template_message_y', 'template_message_size', 'template_message_width'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateBadgePreview);
+});
+
+// Update preview when background image changes
+document.getElementById('template_bg_image').addEventListener('change', updateBadgePreview);
+
+// Modal functions
+function openTemplateModal(templateId = null) {
+    const modal = document.getElementById('templateModal');
+    const form = document.getElementById('templateForm');
+    const title = document.getElementById('modalTitle');
+    
+    if (templateId) {
+        // Edit mode
+        title.textContent = 'Edit Template';
+        loadTemplateData(templateId);
+    } else {
+        // Create mode
+        title.textContent = 'Create New Template';
+        form.reset();
+        document.getElementById('template_id').value = '';
+        document.getElementById('template_bg_color').value = '#FFFFFF';
+        document.getElementById('template_bg_color_picker').value = '#FFFFFF';
+        document.getElementById('template_text_color').value = '#000000';
+        document.getElementById('template_text_color_picker').value = '#000000';
+    }
+    
+    modal.style.display = 'block';
+    
+    // Update preview after modal is shown
+    setTimeout(updateBadgePreview, 100);
+}
+
+function closeTemplateModal() {
+    document.getElementById('templateModal').style.display = 'none';
+}
+
+async function loadTemplateData(templateId) {
+    try {
+        const response = await fetch(`/admin/templates/${templateId}`);
+        const template = await response.json();
+        
+        document.getElementById('template_id').value = template.id;
+        document.getElementById('template_name').value = template.name;
+        document.getElementById('template_description').value = template.description || '';
+        document.getElementById('template_width').value = template.layout_config.width || 800;
+        document.getElementById('template_height').value = template.layout_config.height || 600;
+        document.getElementById('template_bg_color').value = template.layout_config.background_color || '#FFFFFF';
+        document.getElementById('template_bg_color_picker').value = template.layout_config.background_color || '#FFFFFF';
+        document.getElementById('template_bg_image').value = template.layout_config.background_image || '';
+        document.getElementById('template_text_color').value = template.layout_config.text_color || '#000000';
+        document.getElementById('template_text_color_picker').value = template.layout_config.text_color || '#000000';
+        document.getElementById('template_name_x').value = template.layout_config.name_x || 400;
+        document.getElementById('template_name_y').value = template.layout_config.name_y || 300;
+        document.getElementById('template_frame').value = template.layout_config.frame || '';
+        document.getElementById('template_is_default').checked = template.is_default;
+        
+        // Load title settings
+        document.getElementById('template_title_text').value = template.layout_config.title_text || '';
+        document.getElementById('template_title_x').value = template.layout_config.title_x || 400;
+        document.getElementById('template_title_y').value = template.layout_config.title_y || 100;
+        document.getElementById('template_title_size').value = template.layout_config.title_size || 36;
+        document.getElementById('template_title_color').value = template.layout_config.title_color || '#000000';
+        document.getElementById('template_title_color_picker').value = template.layout_config.title_color || '#000000';
+        
+        // Load subtitle settings
+        document.getElementById('template_subtitle_text').value = template.layout_config.subtitle_text || '';
+        document.getElementById('template_subtitle_x').value = template.layout_config.subtitle_x || 400;
+        document.getElementById('template_subtitle_y').value = template.layout_config.subtitle_y || 500;
+        document.getElementById('template_subtitle_size').value = template.layout_config.subtitle_size || 24;
+        document.getElementById('template_subtitle_color').value = template.layout_config.subtitle_color || '#666666';
+        document.getElementById('template_subtitle_color_picker').value = template.layout_config.subtitle_color || '#666666';
+        
+        // Load message settings
+        document.getElementById('template_message_text').value = template.layout_config.message_text || '';
+        document.getElementById('template_message_x').value = template.layout_config.message_x || 400;
+        document.getElementById('template_message_y').value = template.layout_config.message_y || 550;
+        document.getElementById('template_message_size').value = template.layout_config.message_size || 16;
+        document.getElementById('template_message_color').value = template.layout_config.message_color || '#666666';
+        document.getElementById('template_message_color_picker').value = template.layout_config.message_color || '#666666';
+        document.getElementById('template_message_width').value = template.layout_config.message_width || 600;
+        
+        // Load font family
+        document.getElementById('template_font_family').value = template.layout_config.font_family || 'Arial';
+        
+        // Load overlay images
+        document.getElementById('overlayImagesList').innerHTML = '';
+        if (template.layout_config.overlay_images) {
+            template.layout_config.overlay_images.forEach(overlay => {
+                addOverlayImage();
+                const lastOverlay = document.querySelector('.overlay-image-item:last-child');
+                lastOverlay.querySelector('.overlay-image-select').value = overlay.path;
+                lastOverlay.querySelector('.overlay-x').value = overlay.x;
+                lastOverlay.querySelector('.overlay-y').value = overlay.y;
+                lastOverlay.querySelector('.overlay-width').value = overlay.width;
+                lastOverlay.querySelector('.overlay-height').value = overlay.height;
+            });
+        }
+        
+        // Update preview with loaded data
+        updateBadgePreview();
+    } catch (error) {
+        alert('Error loading template: ' + error.message);
+        closeTemplateModal();
+    }
+}
+
+// Template form submission
+document.getElementById('templateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const templateId = document.getElementById('template_id').value;
+    
+    // Collect overlay images
+    const overlayImages = [];
+    document.querySelectorAll('.overlay-image-item').forEach(item => {
+        const imgPath = item.querySelector('.overlay-image-select').value;
+        if (imgPath) {
+            overlayImages.push({
+                path: imgPath,
+                x: parseInt(item.querySelector('.overlay-x').value) || 0,
+                y: parseInt(item.querySelector('.overlay-y').value) || 0,
+                width: parseInt(item.querySelector('.overlay-width').value) || 100,
+                height: parseInt(item.querySelector('.overlay-height').value) || 100
+            });
+        }
+    });
+    
+    const formData = {
+        name: document.getElementById('template_name').value,
+        description: document.getElementById('template_description').value,
+        is_default: document.getElementById('template_is_default').checked,
+        layout_config: {
+            width: parseInt(document.getElementById('template_width').value),
+            height: parseInt(document.getElementById('template_height').value),
+            background_color: document.getElementById('template_bg_color').value,
+            background_image: document.getElementById('template_bg_image').value || null,
+            text_color: document.getElementById('template_text_color').value,
+            name_x: parseInt(document.getElementById('template_name_x').value),
+            name_y: parseInt(document.getElementById('template_name_y').value),
+            title_text: document.getElementById('template_title_text').value || null,
+            title_x: parseInt(document.getElementById('template_title_x').value),
+            title_y: parseInt(document.getElementById('template_title_y').value),
+            title_size: parseInt(document.getElementById('template_title_size').value),
+            title_color: document.getElementById('template_title_color').value,
+            subtitle_text: document.getElementById('template_subtitle_text').value || null,
+            subtitle_x: parseInt(document.getElementById('template_subtitle_x').value),
+            subtitle_y: parseInt(document.getElementById('template_subtitle_y').value),
+            subtitle_size: parseInt(document.getElementById('template_subtitle_size').value),
+            subtitle_color: document.getElementById('template_subtitle_color').value,
+            message_text: document.getElementById('template_message_text').value || null,
+            message_x: parseInt(document.getElementById('template_message_x').value),
+            message_y: parseInt(document.getElementById('template_message_y').value),
+            message_size: parseInt(document.getElementById('template_message_size').value),
+            message_color: document.getElementById('template_message_color').value,
+            message_width: parseInt(document.getElementById('template_message_width').value),
+            font_family: document.getElementById('template_font_family').value,
+            overlay_images: overlayImages,
+            frame: document.getElementById('template_frame').value || null
+        }
+    };
+    
+    try {
+        let response;
+        if (templateId) {
+            // Update existing template
+            response = await fetch(`/admin/templates/${templateId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+        } else {
+            // Create new template
+            response = await fetch('/admin/templates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+        }
+        
+        if (response.ok) {
+            alert(templateId ? 'Template updated successfully' : 'Template created successfully');
+            closeTemplateModal();
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error saving template: ' + error.message);
+    }
+});
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('templateModal');
+    if (event.target == modal) {
+        closeTemplateModal();
+    }
+}
+
+// Generate preview badge
+async function generatePreviewBadge() {
+    const btn = document.getElementById('previewBtn');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    
+    try {
+        // Collect current template configuration
+        const overlayImages = [];
+        document.querySelectorAll('.overlay-image-item').forEach(item => {
+            const imgPath = item.querySelector('.overlay-image-select').value;
+            if (imgPath) {
+                overlayImages.push({
+                    path: imgPath,
+                    x: parseInt(item.querySelector('.overlay-x').value) || 0,
+                    y: parseInt(item.querySelector('.overlay-y').value) || 0,
+                    width: parseInt(item.querySelector('.overlay-width').value) || 100,
+                    height: parseInt(item.querySelector('.overlay-height').value) || 100
+                });
+            }
+        });
+        
+        const templateConfig = {
+            name: 'Preview Template',
+            layout_config: {
+                width: parseInt(document.getElementById('template_width').value),
+                height: parseInt(document.getElementById('template_height').value),
+                background_color: document.getElementById('template_bg_color').value,
+                background_image: document.getElementById('template_bg_image').value || null,
+                text_color: document.getElementById('template_text_color').value,
+                name_x: parseInt(document.getElementById('template_name_x').value),
+                name_y: parseInt(document.getElementById('template_name_y').value),
+                overlay_images: overlayImages,
+                frame: document.getElementById('template_frame').value || null
+            }
+        };
+        
+        // Create preview badge
+        const response = await fetch('/admin/preview-badge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateConfig)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            const previewUrl = `${window.location.origin}/badge/${data.badge_uuid}`;
+            document.getElementById('previewUrl').value = previewUrl;
+            document.getElementById('previewLink').href = previewUrl;
+            document.getElementById('previewUrlContainer').style.display = 'block';
+        } else {
+            alert('Error generating preview: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+function copyPreviewUrl() {
+    const urlInput = document.getElementById('previewUrl');
+    urlInput.select();
+    document.execCommand('copy');
+    alert('Preview URL copied to clipboard!');
+}
+
+// Upload resource
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    try {
+        const response = await fetch('/admin/resources', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            alert('Resource uploaded successfully');
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error uploading resource: ' + error.message);
+    }
+});
+
+// AI Generate
+document.getElementById('aiGenerateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const prompt = document.getElementById('ai_prompt').value;
+    const style = document.getElementById('badge_style').value;
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Generating...';
+    
+    try {
+        const requestBody = { prompt };
+        // Only include style if it's not empty (not "Auto")
+        if (style) {
+            requestBody.style = style;
+        }
+        
+        const response = await fetch('/admin/generate-ai-badge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('aiImage').src = data.image_url;
+            document.getElementById('aiResult').style.display = 'block';
+            alert('Badge generated and saved as resource! You can now use it in templates.');
+            
+            // Reload page to show new resource in the list
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Error: ' + data.error);
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    } catch (error) {
+        alert('Error generating badge: ' + error.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+});
+
+// AI Frame Generate
+document.getElementById('aiFrameForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const prompt = document.getElementById('frame_prompt').value;
+    const width = document.getElementById('frame_width').value;
+    const height = document.getElementById('frame_height').value;
+    const style = document.getElementById('frame_style').value;
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Generating Frame...';
+    
+    try {
+        const requestBody = { prompt, width, height };
+        // Only include style if it's not empty (not "Auto")
+        if (style) {
+            requestBody.style = style;
+        }
+        
+        const response = await fetch('/admin/generate-ai-frame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('frameImage').src = data.image_url;
+            document.getElementById('frameResult').style.display = 'block';
+            alert('Frame generated and saved as resource! You can now use it in templates.');
+            
+            // Reload page to show new resource in the list
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Error: ' + data.error);
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    } catch (error) {
+        alert('Error generating frame: ' + error.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+});
+
+function deleteResource(id) {
+    if (confirm('Are you sure you want to delete this resource?')) {
+        fetch(`/admin/resources/${id}`, { method: 'DELETE' })
+            .then(() => location.reload())
+            .catch(error => alert('Error: ' + error.message));
+    }
+}
+
+function deleteTemplate(id) {
+    if (confirm('Are you sure you want to delete this template?')) {
+        fetch(`/admin/templates/${id}`, { method: 'DELETE' })
+            .then(() => location.reload())
+            .catch(error => alert('Error: ' + error.message));
+    }
+}
+
+function showCreateTemplate() {
+    openTemplateModal();
+}
+
+function editTemplate(id) {
+    openTemplateModal(id);
+}
+
+// Export/Import Functions
+async function exportApplication() {
+    try {
+        const response = await fetch('/admin/export');
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Export failed');
+        }
+        
+        // Get filename from Content-Disposition header or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'badge_platform_export.zip';
+        if (contentDisposition) {
+            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+            if (matches != null && matches[1]) {
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        }
+        
+        // Download the file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        alert('✓ Export successful! File downloaded.');
+    } catch (error) {
+        alert('Export failed: ' + error.message);
+    }
+}
+
+async function importApplication(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    if (!confirm('⚠️ WARNING: This will OVERWRITE all existing templates and resources. Issued badges will NOT be affected. Continue?')) {
+        input.value = '';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/admin/import', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Import failed');
+        }
+        
+        alert(`✓ Import successful!\n\nTemplates: ${data.stats.templates_imported}\nResources: ${data.stats.resources_imported}\nFiles: ${data.stats.files_imported}`);
+        
+        // Reload page to show imported data
+        location.reload();
+    } catch (error) {
+        alert('Import failed: ' + error.message);
+    } finally {
+        input.value = '';
+    }
+}
+</script>
+{% endblock %}

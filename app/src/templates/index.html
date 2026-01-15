@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Digital Badge Platform{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Welcome to Digital Badge Platform</h2>
+    <p>Create and share professional digital badges with ease.</p>
+    
+    <h3 style="margin-top: 2rem;">Create a Badge</h3>
+    <form id="badgeForm">
+        <div class="form-group">
+            <label for="template_id">Template</label>
+            <select id="template_id" name="template_id">
+                <option value="">Use Default Template</option>
+                {% for template in templates %}
+                <option value="{{ template.id }}" {% if template.is_default %}selected{% endif %}>
+                    {{ template.name }}{% if template.is_default %} (Default){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                Select a template or leave blank to use the default
+            </small>
+        </div>
+        
+        <div class="form-group">
+            <label for="recipient_name">Recipient Name</label>
+            <input type="text" id="recipient_name" name="recipient_name" maxlength="18" required>
+            <small style="color: #666; display: block; margin-top: 0.25rem;">
+                Maximum 18 characters
+            </small>
+        </div>
+        
+        <div class="form-group">
+            <label for="recipient_email">Recipient Email (optional)</label>
+            <input type="text" id="recipient_email" name="recipient_email">
+        </div>
+        
+        <button type="submit" class="btn btn-success">Generate Badge</button>
+    </form>
+    
+    <div id="result" style="margin-top: 2rem; display: none;">
+        <h3>Badge Created!</h3>
+        <div class="badge-preview">
+            <img id="badgeImage" src="" alt="Badge">
+            <img id="qrCode" src="" alt="QR Code" style="max-width: 200px; margin-top: 1rem;">
+        </div>
+        <p><strong>Public URL:</strong> <a id="publicUrl" href="" target="_blank"></a></p>
+    </div>
+</div>
+
+<script>
+document.getElementById('badgeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const templateId = document.getElementById('template_id').value;
+    const formData = {
+        recipient_name: document.getElementById('recipient_name').value,
+        recipient_email: document.getElementById('recipient_email').value
+    };
+    
+    // Add template_id if selected
+    if (templateId) {
+        formData.template_id = parseInt(templateId);
+    }
+    
+    try {
+        const response = await fetch('/api/badges', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('badgeImage').src = data.badge.image_path;
+            document.getElementById('qrCode').src = data.qr_code_url;
+            document.getElementById('publicUrl').href = data.public_url;
+            document.getElementById('publicUrl').textContent = data.public_url;
+            document.getElementById('result').style.display = 'block';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error creating badge: ' + error.message);
+    }
+});
+</script>
+{% endblock %}

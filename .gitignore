@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+# IMPORTANT: Never commit AWS credentials to git
+# Use AWS CLI config or IAM roles instead
+
+# Database
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+app/src/static/uploads/*
+!app/src/static/uploads/.gitkeep
+app/src/static/badges/*
+!app/src/static/badges/.gitkeep

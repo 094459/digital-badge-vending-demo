@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Badges - Digital Badge Platform{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: grid;
+        grid-template-columns: auto 150px 1fr auto;
+        gap: 1rem;
+        align-items: center;
+        background: white;
+    }
+    
+    .badge-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .badge-checkbox {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .badge-checkbox input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .badge-thumbnail {
+        width: 150px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+    
+    .badge-info {
+        flex: 1;
+    }
+    
+    .badge-info h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.25rem;
+    }
+    
+    .badge-info p {
+        margin: 0.25rem 0;
+        color: #666;
+        font-size: 0.875rem;
+    }
+    
+    .badge-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .badge-meta {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .badge-meta span {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        background: #f0f0f0;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+    
+    .bulk-actions {
+        display: none;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .bulk-actions.active {
+        display: flex;
+    }
+    
+    .bulk-actions-info {
+        flex: 1;
+        font-weight: 500;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #666;
+    }
+    
+    .empty-state h3 {
+        margin-bottom: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+        .badge-card {
+            grid-template-columns: auto 1fr;
+        }
+        
+        .badge-thumbnail {
+            grid-column: 1 / -1;
+            width: 100%;
+            height: 200px;
+        }
+        
+        .badge-actions {
+            grid-column: 1 / -1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2>Issued Badges</h2>
+        <a href="/" class="btn">Create New Badge</a>
+    </div>
+    
+    {% if badges %}
+        <div class="bulk-actions" id="bulkActions">
+            <div class="bulk-actions-info">
+                <span id="selectedCount">0</span> badge(s) selected
+            </div>
+            <button class="btn btn-danger" onclick="deleteSelected()">Delete Selected</button>
+            <button class="btn" onclick="clearSelection()">Clear Selection</button>
+        </div>
+        
+        <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 4px;">
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="width: 18px; height: 18px;">
+                <span>Select All ({{ badges|length }} badges)</span>
+            </label>
+        </div>
+        
+        <div id="badgesList">
+            {% for badge in badges %}
+            <div class="badge-card" id="badge-{{ badge.id }}">
+                <div class="badge-checkbox">
+                    <input type="checkbox" class="badge-select" data-badge-id="{{ badge.id }}" onchange="updateBulkActions()">
+                </div>
+                
+                <img src="{{ badge.image_path }}" alt="Badge" class="badge-thumbnail">
+                
+                <div class="badge-info">
+                    <h3>{{ badge.recipient_name or 'Unnamed Badge' }}</h3>
+                    {% if badge.recipient_email %}
+                    <p><strong>Email:</strong> {{ badge.recipient_email }}</p>
+                    {% endif %}
+                    <p><strong>UUID:</strong> {{ badge.uuid }}</p>
+                    <p><strong>Template:</strong> {{ badge.template.name }}</p>
+                    
+                    <div class="badge-meta">
+                        <span>Created: {{ badge.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <span>ID: {{ badge.id }}</span>
+                    </div>
+                </div>
+                
+                <div class="badge-actions">
+                    <a href="/badge/{{ badge.uuid }}" target="_blank" class="btn">View Badge</a>
+                    <a href="{{ badge.qr_code_path }}" download class="btn">Download QR</a>
+                    <button class="btn btn-danger" onclick="deleteBadge({{ badge.id }})">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <h3>No badges issued yet</h3>
+            <p>Create your first badge to get started!</p>
+            <a href="/" class="btn btn-success" style="margin-top: 1rem;">Create Badge</a>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function updateBulkActions() {
+    const checkboxes = document.querySelectorAll('.badge-select');
+    const selected = Array.from(checkboxes).filter(cb => cb.checked);
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    const selectAll = document.getElementById('selectAll');
+    
+    selectedCount.textContent = selected.length;
+    
+    if (selected.length > 0) {
+        bulkActions.classList.add('active');
+    } else {
+        bulkActions.classList.remove('active');
+    }
+    
+    // Update select all checkbox state
+    if (selected.length === checkboxes.length) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+    } else if (selected.length > 0) {
+        selectAll.indeterminate = true;
+    } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.badge-select');
+    
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+    
+    updateBulkActions();
+}
+
+function clearSelection() {
+    const checkboxes = document.querySelectorAll('.badge-select');
+    checkboxes.forEach(cb => cb.checked = false);
+    document.getElementById('selectAll').checked = false;
+    updateBulkActions();
+}
+
+async function deleteSelected() {
+    const checkboxes = document.querySelectorAll('.badge-select:checked');
+    const badgeIds = Array.from(checkboxes).map(cb => cb.dataset.badgeId);
+    
+    if (badgeIds.length === 0) {
+        return;
+    }
+    
+    const confirmMsg = `Are you sure you want to delete ${badgeIds.length} badge(s)? This action cannot be undone.`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const badgeId of badgeIds) {
+        try {
+            const response = await fetch(`/badges/${badgeId}/delete`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                successCount++;
+                const badgeCard = document.getElementById(`badge-${badgeId}`);
+                badgeCard.style.opacity = '0';
+                badgeCard.style.transition = 'opacity 0.3s';
+                
+                setTimeout(() => {
+                    badgeCard.remove();
+                    
+                    // Check if there are any badges left
+                    const badgesList = document.getElementById('badgesList');
+                    if (badgesList && badgesList.children.length === 0) {
+                        location.reload();
+                    }
+                }, 300);
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            errorCount++;
+        }
+    }
+    
+    // Clear selection and update UI
+    setTimeout(() => {
+        clearSelection();
+        
+        if (errorCount > 0) {
+            alert(`Deleted ${successCount} badge(s). ${errorCount} failed.`);
+        }
+    }, 400);
+}
+
+async function deleteBadge(badgeId) {
+    if (!confirm('Are you sure you want to delete this badge? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/badges/${badgeId}/delete`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const badgeCard = document.getElementById(`badge-${badgeId}`);
+            badgeCard.style.opacity = '0';
+            badgeCard.style.transition = 'opacity 0.3s';
+            
+            setTimeout(() => {
+                badgeCard.remove();
+                
+                // Check if there are any badges left
+                const badgesList = document.getElementById('badgesList');
+                if (badgesList && badgesList.children.length === 0) {
+                    location.reload();
+                }
+            }, 300);
+        } else {
+            const data = await response.json();
+            alert('Error deleting badge: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error deleting badge: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
