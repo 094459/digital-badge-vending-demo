@@ -48,53 +48,6 @@
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
-    .badge-header {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 1.5rem;
-        align-items: start;
-        margin-bottom: 2rem;
-    }
-    
-    .badge-logo {
-        width: 80px;
-        height: 80px;
-        border: 2px solid #333;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        text-align: center;
-        padding: 0.5rem;
-        background: white;
-    }
-    
-    .badge-logo img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-    }
-    
-    .badge-titles {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .badge-title {
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin: 0;
-        color: #333;
-    }
-    
-    .badge-subtitle {
-        font-size: 1rem;
-        color: #666;
-        margin: 0;
-    }
-    
     .badge-image-container {
         border: 2px solid #333;
         border-radius: 12px;
@@ -144,43 +97,11 @@
         .badge-card {
             padding: 1.5rem;
         }
-        
-        .badge-header {
-            grid-template-columns: 1fr;
-            text-align: center;
-        }
-        
-        .badge-logo {
-            margin: 0 auto;
-        }
-        
-        .badge-title {
-            font-size: 1.25rem;
-        }
     }
 </style>
 </head>
 <body>
 <div class="badge-card">
-    <div class="badge-header">
-        <div class="badge-logo">
-            {% if badge.template.get_layout_config().get('overlay_images') and badge.template.get_layout_config()['overlay_images']|length > 0 %}
-                <img src="{{ badge.template.get_layout_config()['overlay_images'][0]['path'] }}" alt="Logo">
-            {% else %}
-                Digital Badge Logo
-            {% endif %}
-        </div>
-        
-        <div class="badge-titles">
-            <h1 class="badge-title">
-                {{ badge.template.get_layout_config().get('title_text', 'Digital Badge Title') }}
-            </h1>
-            <p class="badge-subtitle">
-                {{ badge.template.get_layout_config().get('subtitle_text', 'Sub Title') }}
-            </p>
-        </div>
-    </div>
-    
     <div class="badge-image-container">
         <img src="{{ badge.image_path }}" alt="Badge for {{ badge.recipient_name }}">
     </div>
@@ -188,6 +109,20 @@
     <p class="badge-message">
         {{ badge.template.get_layout_config().get('message_text', 'Digital Badge message') }}
     </p>
+    
+    {% if badge.template.get_layout_config().get('cta_text') and badge.template.get_layout_config().get('cta_url') %}
+    <div style="text-align: center; margin-top: 2rem; padding: 1.5rem; background: #f9f9f9; border-radius: 8px;">
+        <p style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600; color: #333;">
+            {{ badge.template.get_layout_config().get('cta_text') }}
+        </p>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ badge.template.get_layout_config().get('cta_url') | urlencode }}" 
+             alt="QR Code for {{ badge.template.get_layout_config().get('cta_text') }}"
+             style="width: 150px; height: 150px; border: 2px solid #333; border-radius: 8px;">
+        <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: #666;">
+            Scan to visit
+        </p>
+    </div>
+    {% endif %}
     
     <div style="text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e0e0e0;">
         <a href="{{ linkedin_share_url }}" 

@@ -819,6 +819,24 @@ function hideImagePreview() {
                         </small>
                     </div>
                     
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Call to Action (Optional)</h3>
+                    
+                    <div class="form-group">
+                        <label for="template_cta_text">CTA Text</label>
+                        <input type="text" id="template_cta_text" name="cta_text" placeholder="e.g., Learn More, Visit Our Website, Get Started">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Text to display above the QR code. Leave blank to disable CTA.
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_cta_url">CTA URL</label>
+                        <input type="url" id="template_cta_url" name="cta_url" placeholder="https://example.com">
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            URL that the QR code will link to. Must be a valid URL starting with http:// or https://
+                        </small>
+                    </div>
+                    
                     <h3 style="margin-top: 1.5rem; margin-bottom: 1rem;">Typography</h3>
                     
                     <div class="form-group">
@@ -854,6 +872,18 @@ function hideImagePreview() {
                         </select>
                         <small style="color: #666; display: block; margin-top: 0.25rem;">
                             Only AI-generated badge designs are shown. Generate more using the AI Badge Generator above.
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_bg_opacity">Background Image Opacity</label>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <input type="range" id="template_bg_opacity" name="bg_opacity" min="0" max="100" value="100" 
+                                   style="flex: 1;" oninput="document.getElementById('opacityValue').textContent = this.value + '%'; updateBadgePreview();">
+                            <span id="opacityValue" style="min-width: 50px; font-weight: 600;">100%</span>
+                        </div>
+                        <small style="color: #666; display: block; margin-top: 0.25rem;">
+                            Adjust transparency to make text more visible. 100% = fully opaque, 0% = fully transparent.
                         </small>
                     </div>
                     
@@ -985,10 +1015,14 @@ function updateBadgePreview() {
     
     // Draw background
     if (bgImagePath) {
-        // Load and draw background image
+        // Load and draw background image with opacity
+        const bgOpacity = parseInt(document.getElementById('template_bg_opacity').value) / 100 || 1;
         const bgImg = new Image();
         bgImg.onload = function() {
+            ctx.save();
+            ctx.globalAlpha = bgOpacity;
             ctx.drawImage(bgImg, 0, 0, width, height);
+            ctx.restore();
             drawOverlaysAndText();
         };
         bgImg.onerror = function() {
@@ -1341,6 +1375,8 @@ async function loadTemplateData(templateId) {
         document.getElementById('template_bg_color').value = template.layout_config.background_color || '#FFFFFF';
         document.getElementById('template_bg_color_picker').value = template.layout_config.background_color || '#FFFFFF';
         document.getElementById('template_bg_image').value = template.layout_config.background_image || '';
+        document.getElementById('template_bg_opacity').value = template.layout_config.bg_opacity || 100;
+        document.getElementById('opacityValue').textContent = (template.layout_config.bg_opacity || 100) + '%';
         document.getElementById('template_text_color').value = template.layout_config.text_color || '#000000';
         document.getElementById('template_text_color_picker').value = template.layout_config.text_color || '#000000';
         document.getElementById('template_name_x').value = template.layout_config.name_x || 400;
@@ -1372,6 +1408,10 @@ async function loadTemplateData(templateId) {
         document.getElementById('template_message_color').value = template.layout_config.message_color || '#666666';
         document.getElementById('template_message_color_picker').value = template.layout_config.message_color || '#666666';
         document.getElementById('template_message_width').value = template.layout_config.message_width || 600;
+        
+        // Load CTA settings
+        document.getElementById('template_cta_text').value = template.layout_config.cta_text || '';
+        document.getElementById('template_cta_url').value = template.layout_config.cta_url || '';
         
         // Load font family
         document.getElementById('template_font_family').value = template.layout_config.font_family || 'Arial';
@@ -1428,6 +1468,7 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
             height: parseInt(document.getElementById('template_height').value),
             background_color: document.getElementById('template_bg_color').value,
             background_image: document.getElementById('template_bg_image').value || null,
+            bg_opacity: parseInt(document.getElementById('template_bg_opacity').value) || 100,
             text_color: document.getElementById('template_text_color').value,
             name_x: parseInt(document.getElementById('template_name_x').value),
             name_y: parseInt(document.getElementById('template_name_y').value),
@@ -1447,6 +1488,8 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
             message_size: parseInt(document.getElementById('template_message_size').value),
             message_color: document.getElementById('template_message_color').value,
             message_width: parseInt(document.getElementById('template_message_width').value),
+            cta_text: document.getElementById('template_cta_text').value || null,
+            cta_url: document.getElementById('template_cta_url').value || null,
             font_family: document.getElementById('template_font_family').value,
             overlay_images: overlayImages,
             frame: document.getElementById('template_frame').value || null

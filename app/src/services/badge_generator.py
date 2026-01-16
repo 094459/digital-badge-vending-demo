@@ -178,7 +178,21 @@ class BadgeGenerator:
                 if os.path.exists(bg_path):
                     bg_img = Image.open(bg_path).convert('RGB')
                     bg_img = bg_img.resize((width, height))
-                    img = bg_img
+                    
+                    # Apply opacity if specified
+                    bg_opacity = layout_config.get('bg_opacity', 100)
+                    if bg_opacity < 100:
+                        # Convert to RGBA to support transparency
+                        bg_img = bg_img.convert('RGBA')
+                        # Adjust alpha channel
+                        alpha = int(255 * (bg_opacity / 100))
+                        bg_img.putalpha(alpha)
+                        
+                        # Blend with base color
+                        base = Image.new('RGBA', (width, height), layout_config.get('background_color', '#FFFFFF'))
+                        img = Image.alpha_composite(base, bg_img).convert('RGB')
+                    else:
+                        img = bg_img
             except Exception as e:
                 print(f"Error loading background image: {e}")
         
