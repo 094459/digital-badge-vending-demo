@@ -221,23 +221,29 @@ if [ -z "$ADMIN_PASSWORD" ]; then
     exit 1
 fi
 
-# Ask for custom BASE_URL
+# Ask about custom domain upfront
 echo ""
-echo -e "${YELLOW}Custom Domain Configuration (Optional)${NC}"
-echo "If you have a custom domain/DNS configured (e.g., https://look.my-badge.info),"
-echo "enter it here. Otherwise, press Enter to use the auto-detected ECS URL."
-echo ""
-read -p "Enter custom BASE_URL (or press Enter to auto-detect): " CUSTOM_BASE_URL
-
-if [ -n "$CUSTOM_BASE_URL" ]; then
-    # Validate URL format
-    if [[ ! "$CUSTOM_BASE_URL" =~ ^https?:// ]]; then
-        echo -e "${YELLOW}⚠ Adding https:// prefix to URL${NC}"
-        CUSTOM_BASE_URL="https://$CUSTOM_BASE_URL"
+echo -e "${YELLOW}Custom Domain Configuration${NC}"
+read -p "Do you have a custom domain configured for this app? (y/n) " -n 1 -r
+echo
+CUSTOM_BASE_URL=""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    read -p "Enter your custom domain URL (e.g., https://look.my-badge.info): " CUSTOM_BASE_URL
+    
+    if [ -n "$CUSTOM_BASE_URL" ]; then
+        # Validate and format URL
+        if [[ ! "$CUSTOM_BASE_URL" =~ ^https?:// ]]; then
+            echo -e "${YELLOW}⚠ Adding https:// prefix to URL${NC}"
+            CUSTOM_BASE_URL="https://$CUSTOM_BASE_URL"
+        fi
+        # Remove trailing slash if present
+        CUSTOM_BASE_URL="${CUSTOM_BASE_URL%/}"
+        echo -e "${GREEN}✓ Will use custom BASE_URL: $CUSTOM_BASE_URL${NC}"
+    else
+        echo -e "${YELLOW}⚠ No custom URL provided, will use auto-detected ECS URL${NC}"
     fi
-    # Remove trailing slash if present
-    CUSTOM_BASE_URL="${CUSTOM_BASE_URL%/}"
-    echo -e "${GREEN}✓ Will use custom BASE_URL: $CUSTOM_BASE_URL${NC}"
+else
+    echo -e "${GREEN}✓ Will use auto-detected ECS URL for BASE_URL${NC}"
 fi
 
 # Step 5: Deploy to ECS Express Mode
