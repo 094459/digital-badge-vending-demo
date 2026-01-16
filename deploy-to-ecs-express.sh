@@ -221,6 +221,25 @@ if [ -z "$ADMIN_PASSWORD" ]; then
     exit 1
 fi
 
+# Ask for custom BASE_URL
+echo ""
+echo -e "${YELLOW}Custom Domain Configuration (Optional)${NC}"
+echo "If you have a custom domain/DNS configured (e.g., https://look.my-badge.info),"
+echo "enter it here. Otherwise, press Enter to use the auto-detected ECS URL."
+echo ""
+read -p "Enter custom BASE_URL (or press Enter to auto-detect): " CUSTOM_BASE_URL
+
+if [ -n "$CUSTOM_BASE_URL" ]; then
+    # Validate URL format
+    if [[ ! "$CUSTOM_BASE_URL" =~ ^https?:// ]]; then
+        echo -e "${YELLOW}⚠ Adding https:// prefix to URL${NC}"
+        CUSTOM_BASE_URL="https://$CUSTOM_BASE_URL"
+    fi
+    # Remove trailing slash if present
+    CUSTOM_BASE_URL="${CUSTOM_BASE_URL%/}"
+    echo -e "${GREEN}✓ Will use custom BASE_URL: $CUSTOM_BASE_URL${NC}"
+fi
+
 # Step 5: Deploy to ECS Express Mode
 echo ""
 echo -e "${YELLOW}Step 5: Deploying to ECS Express Mode...${NC}"
@@ -272,6 +291,15 @@ if [ "$SERVICE_STATUS" = "ACTIVE" ]; then
         APP_URL="https://$SERVICE_NAME.ecs.$AWS_REGION.on.aws"
     fi
     
+    # Use custom BASE_URL if provided, otherwise use detected URL
+    if [ -n "$CUSTOM_BASE_URL" ]; then
+        BASE_URL="$CUSTOM_BASE_URL"
+        echo -e "${GREEN}✓ Using custom BASE_URL: $BASE_URL${NC}"
+    else
+        BASE_URL="$APP_URL"
+        echo -e "${GREEN}✓ Using auto-detected URL: $BASE_URL${NC}"
+    fi
+    
     # Update with BASE_URL
     echo ""
     echo -e "${YELLOW}Updating BASE_URL configuration...${NC}"
@@ -288,7 +316,7 @@ if [ "$SERVICE_STATUS" = "ACTIVE" ]; then
                 {\"name\": \"BEDROCK_REGION\", \"value\": \"$BEDROCK_REGION\"},
                 {\"name\": \"SECRET_KEY\", \"value\": \"$SECRET_KEY\"},
                 {\"name\": \"ADMIN_PASSWORD\", \"value\": \"$ADMIN_PASSWORD\"},
-                {\"name\": \"BASE_URL\", \"value\": \"$APP_URL\"}
+                {\"name\": \"BASE_URL\", \"value\": \"$BASE_URL\"}
             ]
         }" \
         --cpu "1024" \
@@ -391,7 +419,16 @@ else
         echo -e "${YELLOW}⚠ Could not extract URL from service, using default format${NC}"
     fi
 
-    echo -e "${GREEN}✓ Application URL: $APP_URL${NC}"
+    echo -e "${GREEN}✓ ECS Application URL: $APP_URL${NC}"
+
+    # Use custom BASE_URL if provided, otherwise use detected URL
+    if [ -n "$CUSTOM_BASE_URL" ]; then
+        BASE_URL="$CUSTOM_BASE_URL"
+        echo -e "${GREEN}✓ Using custom BASE_URL: $BASE_URL${NC}"
+    else
+        BASE_URL="$APP_URL"
+        echo -e "${GREEN}✓ Using auto-detected BASE_URL: $BASE_URL${NC}"
+    fi
 
     # Update the service with the correct BASE_URL
     echo ""
@@ -409,7 +446,7 @@ else
                 {\"name\": \"BEDROCK_REGION\", \"value\": \"$BEDROCK_REGION\"},
                 {\"name\": \"SECRET_KEY\", \"value\": \"$SECRET_KEY\"},
                 {\"name\": \"ADMIN_PASSWORD\", \"value\": \"$ADMIN_PASSWORD\"},
-                {\"name\": \"BASE_URL\", \"value\": \"$APP_URL\"}
+                {\"name\": \"BASE_URL\", \"value\": \"$BASE_URL\"}
             ]
         }" \
         --cpu "1024" \
@@ -425,18 +462,31 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}✓ Deployment Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "Your application is now available at:"
-echo -e "${GREEN}$APP_URL${NC}"
+if [ -n "$CUSTOM_BASE_URL" ]; then
+    echo "Your application is configured with custom domain:"
+    echo -e "${GREEN}$BASE_URL${NC}"
+    echo ""
+    echo "ECS-provided URL (for reference):"
+    echo "  $APP_URL"
+else
+    echo "Your application is now available at:"
+    echo -e "${GREEN}$BASE_URL${NC}"
+fi
 echo ""
 echo "Service ARN:"
 echo "  $SERVICE_ARN"
 echo ""
 echo "Endpoints:"
-echo "  Home:        $APP_URL/"
-echo "  Health:      $APP_URL/health"
-echo "  Admin:       $APP_URL/admin"
-echo "  API:         $APP_URL/api/badges"
+echo "  Home:        $BASE_URL/"
+echo "  Health:      $BASE_URL/health"
+echo "  Admin:       $BASE_URL/admin"
+echo "  API:         $BASE_URL/api/badges"
 echo ""
+if [ -n "$CUSTOM_BASE_URL" ]; then
+    echo -e "${YELLOW}Note: Make sure your custom domain DNS is pointing to the ECS URL:${NC}"
+    echo "  $APP_URL"
+    echo ""
+fi
 echo "To monitor your service:"
 echo "  aws ecs describe-express-gateway-service --service-arn $SERVICE_ARN --region $AWS_REGION"
 echo ""
@@ -444,5 +494,7 @@ echo "To view logs:"
 echo "  aws logs tail /aws/ecs/express/$SERVICE_NAME --follow --region $AWS_REGION"
 echo ""
 echo "Note: It may take a few minutes for the service to become fully available."
-echo "      The initial deployment will restart once to apply the BASE_URL."
+if [ -z "$CUSTOM_BASE_URL" ]; then
+    echo "      The initial deployment will restart once to apply the BASE_URL."
+fi
 echo ""
