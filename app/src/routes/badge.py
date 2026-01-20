@@ -15,6 +15,7 @@ class BadgeRequest(BaseModel):
     recipient_name: Optional[str] = None
     recipient_email: Optional[str] = None
     badge_data: Optional[dict] = None
+    custom_data: Optional[dict] = None
     use_ai: Optional[bool] = False
     ai_prompt: Optional[str] = None
 
@@ -30,6 +31,7 @@ def create_badge():
         "recipient_name": "John Doe",
         "recipient_email": "john@example.com",  // optional, no validation
         "badge_data": {},  // optional additional data
+        "custom_data": {"score": "95", "grade": "A+"},  // optional custom field values
         "use_ai": false,  // optional, use AI generation
         "ai_prompt": "..."  // required if use_ai is true
     }
@@ -59,7 +61,8 @@ def create_badge():
                 template_id=badge_request.template_id,
                 recipient_name=badge_request.recipient_name,
                 recipient_email=badge_request.recipient_email,
-                badge_data=badge_request.badge_data
+                badge_data=badge_request.badge_data,
+                custom_data=badge_request.custom_data
             )
         
         base_url = get_base_url()

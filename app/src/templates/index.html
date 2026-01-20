@@ -37,6 +37,33 @@
             <input type="text" id="recipient_email" name="recipient_email">
         </div>
         
+        {% if custom_fields %}
+        <h4 style="margin-top: 1.5rem; margin-bottom: 1rem;">Custom Fields</h4>
+        {% for field in custom_fields %}
+        <div class="form-group">
+            <label for="custom_{{ field.field_key }}">
+                {{ field.name }}{% if field.is_required %} *{% endif %}
+            </label>
+            {% if field.field_type == 'number' %}
+            <input type="number" id="custom_{{ field.field_key }}" name="custom_{{ field.field_key }}" 
+                   {% if field.is_required %}required{% endif %} 
+                   {% if field.default_value %}value="{{ field.default_value }}"{% endif %}>
+            {% elif field.field_type == 'date' %}
+            <input type="date" id="custom_{{ field.field_key }}" name="custom_{{ field.field_key }}" 
+                   {% if field.is_required %}required{% endif %} 
+                   {% if field.default_value %}value="{{ field.default_value }}"{% endif %}>
+            {% else %}
+            <input type="text" id="custom_{{ field.field_key }}" name="custom_{{ field.field_key }}" 
+                   {% if field.is_required %}required{% endif %} 
+                   {% if field.default_value %}value="{{ field.default_value }}"{% endif %}>
+            {% endif %}
+            {% if field.description %}
+            <small style="color: #666; display: block; margin-top: 0.25rem;">{{ field.description }}</small>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+        
         <button type="submit" class="btn btn-success">Generate Badge</button>
     </form>
     
@@ -63,6 +90,20 @@ document.getElementById('badgeForm').addEventListener('submit', async (e) => {
     // Add template_id if selected
     if (templateId) {
         formData.template_id = parseInt(templateId);
+    }
+    
+    // Collect custom field data
+    const customData = {};
+    document.querySelectorAll('[id^="custom_"]').forEach(input => {
+        const fieldKey = input.id.replace('custom_', '');
+        if (input.value) {
+            customData[fieldKey] = input.value;
+        }
+    });
+    
+    // Add custom_data if any fields were filled
+    if (Object.keys(customData).length > 0) {
+        formData.custom_data = customData;
     }
     
     try {

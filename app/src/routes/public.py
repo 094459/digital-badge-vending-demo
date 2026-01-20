@@ -36,9 +36,10 @@ def health():
 @bp.route('/')
 def index():
     """Home page"""
-    from app.src.models import Template
+    from app.src.models import Template, CustomField
     templates = Template.query.all()
-    return render_template('index.html', templates=templates)
+    custom_fields = CustomField.query.all()
+    return render_template('index.html', templates=templates, custom_fields=custom_fields)
 
 
 @bp.route('/badges')

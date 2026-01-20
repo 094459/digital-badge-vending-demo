@@ -56,7 +56,7 @@ class BadgeGenerator:
             current_x += char_width
     
     def create_badge(self, template_id: int = None, recipient_name: str = None, 
-                     recipient_email: str = None, badge_data: dict = None):
+                     recipient_email: str = None, badge_data: dict = None, custom_data: dict = None):
         """
         Create a new virtual badge
         
@@ -65,6 +65,7 @@ class BadgeGenerator:
             recipient_name: Name of recipient
             recipient_email: Email of recipient
             badge_data: Additional badge data
+            custom_data: Custom field values (e.g., {'score': '95', 'grade': 'A+'})
             
         Returns:
             Badge object
@@ -84,6 +85,11 @@ class BadgeGenerator:
             recipient_name=recipient_name,
             recipient_email=recipient_email
         )
+        
+        # Set custom data if provided
+        if custom_data:
+            badge.set_custom_data(custom_data)
+        
         db.session.add(badge)
         db.session.flush()  # Get the UUID
         
@@ -339,6 +345,38 @@ class BadgeGenerator:
                 line_width = bbox[2] - bbox[0]
                 draw.text((message_x - line_width // 2, message_y + (i * line_height)), 
                          line, fill=message_color, font=font)
+        
+        # Add custom fields if specified
+        custom_fields_config = layout_config.get('custom_fields', {})
+        if custom_fields_config and badge.custom_data:
+            custom_data = badge.get_custom_data()
+            
+            for field_key, field_config in custom_fields_config.items():
+                if not field_config.get('enabled', False):
+                    continue
+                
+                # Get the value for this field
+                field_value = custom_data.get(field_key)
+                if not field_value:
+                    continue
+                
+                # Get field configuration
+                field_x = field_config.get('x', width // 2)
+                field_y = field_config.get('y', 350)
+                field_size = field_config.get('size', 32)
+                field_color = field_config.get('color', '#000000')
+                
+                # Load font for this field
+                try:
+                    field_font = ImageFont.truetype(font_path, field_size)
+                except:
+                    field_font = ImageFont.load_default()
+                
+                # Draw the custom field value (centered)
+                bbox = draw.textbbox((0, 0), str(field_value), font=field_font)
+                text_width = bbox[2] - bbox[0]
+                draw.text((field_x - text_width // 2, field_y), str(field_value), 
+                         fill=field_color, font=field_font)
         
         # Add frame if specified
         if layout_config.get('frame'):

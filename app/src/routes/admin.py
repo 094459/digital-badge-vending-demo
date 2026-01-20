@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, current_app, send_file, redirect, url_for, session
 from werkzeug.utils import secure_filename
-from app.src.models import Template, Resource
+from app.src.models import Template, Resource, CustomField
 from app.src.extensions import db
 from app.src.services import ImageService
 from app.src.services.export_import_service import ExportImportService
@@ -27,11 +27,18 @@ def index():
     
     templates = Template.query.all()
     resources = Resource.query.all()
+    custom_fields = CustomField.query.all()
     
     # Convert resources to dictionaries for JSON serialization
     resources_dict = [r.to_dict() for r in resources]
+    custom_fields_dict = [f.to_dict() for f in custom_fields]
     
-    return render_template('admin/index.html', templates=templates, resources=resources, resources_json=resources_dict)
+    return render_template('admin/index.html', 
+                         templates=templates, 
+                         resources=resources, 
+                         resources_json=resources_dict,
+                         custom_fields=custom_fields,
+                         custom_fields_json=custom_fields_dict)
 
 
 @bp.route('/templates', methods=['GET'])
@@ -455,3 +462,83 @@ def import_application():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# Custom Fields Management
+@bp.route('/custom-fields', methods=['GET'])
+def list_custom_fields():
+    """List all custom fields"""
+    auth_check = require_auth()
+    if auth_check:
+        return auth_check
+    
+    fields = CustomField.query.all()
+    return jsonify([f.to_dict() for f in fields])
+
+
+@bp.route('/custom-fields', methods=['POST'])
+def create_custom_field():
+    """Create a new custom field"""
+    auth_check = require_auth()
+    if auth_check:
+        return auth_check
+    
+    data = request.get_json()
+    
+    # Generate field_key from name if not provided
+    field_key = data.get('field_key', data['name'].lower().replace(' ', '_'))
+    
+    # Check if field_key already exists
+    existing = CustomField.query.filter_by(field_key=field_key).first()
+    if existing:
+        return jsonify({'error': 'A field with this key already exists'}), 400
+    
+    field = CustomField(
+        name=data['name'],
+        field_key=field_key,
+        description=data.get('description'),
+        field_type=data.get('field_type', 'text'),
+        is_required=data.get('is_required', False),
+        default_value=data.get('default_value')
+    )
+    
+    db.session.add(field)
+    db.session.commit()
+    
+    return jsonify(field.to_dict()), 201
+
+
+@bp.route('/custom-fields/<int:field_id>', methods=['PUT'])
+def update_custom_field(field_id):
+    """Update a custom field"""
+    auth_check = require_auth()
+    if auth_check:
+        return auth_check
+    
+    field = CustomField.query.get_or_404(field_id)
+    data = request.get_json()
+    
+    field.name = data.get('name', field.name)
+    field.description = data.get('description', field.description)
+    field.field_type = data.get('field_type', field.field_type)
+    field.is_required = data.get('is_required', field.is_required)
+    field.default_value = data.get('default_value', field.default_value)
+    
+    db.session.commit()
+    
+    return jsonify(field.to_dict())
+
+
+@bp.route('/custom-fields/<int:field_id>', methods=['DELETE'])
+def delete_custom_field(field_id):
+    """Delete a custom field"""
+    auth_check = require_auth()
+    if auth_check:
+        return auth_check
+    
+    field = CustomField.query.get_or_404(field_id)
+    
+    db.session.delete(field)
+    db.session.commit()
+    
+    return '', 204
