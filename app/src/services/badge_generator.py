@@ -1,9 +1,11 @@
 import os
 import qrcode
+from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 from app.src.models import Badge, Template
 from app.src.extensions import db
 from app.src.services.image_service import ImageService
+from app.src.services.storage_service import StorageService
 from app.src.utils import get_base_url
 
 
@@ -12,8 +14,9 @@ class BadgeGenerator:
     
     def __init__(self, app_config):
         self.badge_folder = app_config['BADGE_FOLDER']
-        # Don't store base_url, use get_base_url() dynamically
+        self.upload_folder = app_config.get('UPLOAD_FOLDER')
         self.image_service = ImageService()
+        self.storage = app_config.get('STORAGE_SERVICE', StorageService())
     
     def _is_emoji(self, char):
         """Check if a character is an emoji"""
@@ -180,9 +183,10 @@ class BadgeGenerator:
         # Add background image if specified
         if layout_config.get('background_image'):
             try:
-                bg_path = os.path.join(os.path.dirname(self.badge_folder), layout_config['background_image'].lstrip('/static/'))
-                if os.path.exists(bg_path):
-                    bg_img = Image.open(bg_path).convert('RGB')
+                bg_relative = self.storage.file_path_to_relative(layout_config['background_image'])
+                bg_img = self.storage.load_pil_image(bg_relative, self.upload_folder)
+                if bg_img:
+                    bg_img = bg_img.convert('RGB')
                     bg_img = bg_img.resize((width, height))
                     
                     # Apply opacity if specified
@@ -209,9 +213,10 @@ class BadgeGenerator:
         if layout_config.get('overlay_images'):
             for overlay in layout_config['overlay_images']:
                 try:
-                    overlay_path = os.path.join(os.path.dirname(self.badge_folder), overlay['path'].lstrip('/static/'))
-                    if os.path.exists(overlay_path):
-                        overlay_img = Image.open(overlay_path).convert('RGBA')
+                    overlay_relative = self.storage.file_path_to_relative(overlay['path'])
+                    overlay_img = self.storage.load_pil_image(overlay_relative, self.upload_folder)
+                    if overlay_img:
+                        overlay_img = overlay_img.convert('RGBA')
                         overlay_img = overlay_img.resize((overlay['width'], overlay['height']))
                         img.paste(overlay_img, (overlay['x'], overlay['y']), overlay_img)
                 except Exception as e:
@@ -381,9 +386,10 @@ class BadgeGenerator:
         # Add frame if specified
         if layout_config.get('frame'):
             try:
-                frame_path = os.path.join(os.path.dirname(self.badge_folder), layout_config['frame'].lstrip('/static/'))
-                if os.path.exists(frame_path):
-                    frame_img = Image.open(frame_path).convert('RGBA')
+                frame_relative = self.storage.file_path_to_relative(layout_config['frame'])
+                frame_img = self.storage.load_pil_image(frame_relative, self.upload_folder)
+                if frame_img:
+                    frame_img = frame_img.convert('RGBA')
                     frame_img = frame_img.resize((width, height))
                     img.paste(frame_img, (0, 0), frame_img)
             except Exception as e:
@@ -397,8 +403,7 @@ class BadgeGenerator:
         
         # Save image
         filename = f"badge_{badge.uuid}.png"
-        filepath = os.path.join(self.badge_folder, filename)
-        img.save(filepath)
+        self.storage.save_pil_image(img, f"badges/{filename}", self.badge_folder)
         
         return f"/static/badges/{filename}"
     
@@ -420,8 +425,9 @@ class BadgeGenerator:
         img = qr.make_image(fill_color="black", back_color="white")
         
         filename = f"qr_{badge.uuid}.png"
-        filepath = os.path.join(self.badge_folder, filename)
-        img.save(filepath)
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        self.storage.save_bytes(buf.getvalue(), f"badges/{filename}", self.badge_folder)
         
         return f"/static/badges/{filename}"
     
@@ -461,10 +467,7 @@ class BadgeGenerator:
         
         # Save generated image
         filename = f"badge_{badge.uuid}.png"
-        filepath = os.path.join(self.badge_folder, filename)
-        
-        with open(filepath, 'wb') as f:
-            f.write(image_bytes)
+        self.storage.save_bytes(image_bytes, f"badges/{filename}", self.badge_folder)
         
         badge.image_path = f"/static/badges/{filename}"
         

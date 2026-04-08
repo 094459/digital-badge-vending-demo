@@ -1,9 +1,11 @@
-from flask import Blueprint, request, jsonify, current_app, send_file
+from flask import Blueprint, request, jsonify, current_app, send_file, Response
 from app.src.services import BadgeGenerator
+from app.src.services.storage_service import StorageService
 from app.src.models import Badge
 from app.src.utils import get_base_url
 from pydantic import BaseModel, Field
 from typing import Optional
+from io import BytesIO
 import os
 
 bp = Blueprint('badge', __name__, url_prefix='/api')
@@ -90,10 +92,12 @@ def get_qr_code(uuid):
     """Get QR code image for badge"""
     badge = Badge.query.filter_by(uuid=uuid).first_or_404()
     
-    qr_path = os.path.join(
-        current_app.root_path, 
-        'src', 
-        badge.qr_code_path.lstrip('/')
-    )
+    storage = current_app.config.get('STORAGE_SERVICE', StorageService())
+    relative = storage.file_path_to_relative(badge.qr_code_path)
+    badge_folder = os.path.join(current_app.root_path, 'src', 'static', 'badges')
+    data = storage.load_bytes(relative, badge_folder)
     
-    return send_file(qr_path, mimetype='image/png')
+    if data is None:
+        return jsonify({'error': 'QR code not found'}), 404
+    
+    return Response(data, content_type='image/png')

@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, jsonify, current_app, session, request
 from app.src.models import Badge
 from app.src.extensions import db
+from app.src.services.storage_service import StorageService
 from app.src.utils import get_base_url
 import os
 
@@ -65,16 +66,17 @@ def delete_badge(badge_id):
     from app.src.models import Badge
     badge = Badge.query.get_or_404(badge_id)
     
-    # Delete associated files
+    # Delete associated files from storage
+    storage = current_app.config.get('STORAGE_SERVICE', StorageService())
+    badge_folder = os.path.join(current_app.root_path, 'src', 'static', 'badges')
+    
     if badge.image_path:
-        image_file = os.path.join(current_app.root_path, 'src', badge.image_path.lstrip('/'))
-        if os.path.exists(image_file):
-            os.remove(image_file)
+        relative = storage.file_path_to_relative(badge.image_path)
+        storage.delete(relative, badge_folder)
     
     if badge.qr_code_path:
-        qr_file = os.path.join(current_app.root_path, 'src', badge.qr_code_path.lstrip('/'))
-        if os.path.exists(qr_file):
-            os.remove(qr_file)
+        relative = storage.file_path_to_relative(badge.qr_code_path)
+        storage.delete(relative, badge_folder)
     
     db.session.delete(badge)
     db.session.commit()

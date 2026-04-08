@@ -6,6 +6,7 @@ from io import BytesIO
 from datetime import datetime
 from app.src.models import Template, Resource
 from app.src.extensions import db
+from app.src.services.storage_service import StorageService
 
 
 class ExportImportService:
@@ -42,13 +43,13 @@ class ExportImportService:
             
             # Export resource files
             upload_folder = app_config.get('UPLOAD_FOLDER')
+            storage = app_config.get('STORAGE_SERVICE', StorageService())
             for resource in resources:
-                file_path = resource.file_path.lstrip('/')
-                full_path = os.path.join(upload_folder, os.path.basename(file_path))
+                relative = storage.file_path_to_relative(resource.file_path)
+                data = storage.load_bytes(relative, upload_folder)
                 
-                if os.path.exists(full_path):
-                    # Store files in 'files/' directory within ZIP
-                    zip_file.write(full_path, f'files/{os.path.basename(file_path)}')
+                if data:
+                    zip_file.writestr(f'files/{os.path.basename(resource.file_path)}', data)
         
         zip_buffer.seek(0)
         return zip_buffer
@@ -115,15 +116,17 @@ class ExportImportService:
                 
                 db.session.commit()
                 
-                # Extract files
+                # Extract files to storage
+                storage = app_config.get('STORAGE_SERVICE', StorageService())
                 for file_info in zip_file.infolist():
                     if file_info.filename.startswith('files/'):
                         filename = os.path.basename(file_info.filename)
-                        target_path = os.path.join(upload_folder, filename)
+                        if not filename:
+                            continue
                         
                         with zip_file.open(file_info) as source:
-                            with open(target_path, 'wb') as target:
-                                shutil.copyfileobj(source, target)
+                            data = source.read()
+                            storage.save_bytes(data, f"uploads/{filename}", upload_folder)
                         
                         stats['files_imported'] += 1
                 

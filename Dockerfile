@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
     fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN pip install uv
+# Install uv from official image (avoids QEMU emulation issues on cross-platform builds)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Copy project files
 COPY pyproject.toml uv.lock ./

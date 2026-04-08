@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 from app.src.models import Template, Resource, CustomField
 from app.src.extensions import db
 from app.src.services import ImageService
+from app.src.services.storage_service import StorageService
 from app.src.services.export_import_service import ExportImportService
 import os
 import json
@@ -161,8 +162,8 @@ def upload_resource():
         return jsonify({'error': 'No file selected'}), 400
     
     filename = secure_filename(file.filename)
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
+    storage = current_app.config.get('STORAGE_SERVICE', StorageService())
+    storage.save_bytes(file.read(), f"uploads/{filename}", current_app.config['UPLOAD_FOLDER'])
     
     resource = Resource(
         name=request.form.get('name', filename),
@@ -186,10 +187,10 @@ def delete_resource(resource_id):
     
     resource = Resource.query.get_or_404(resource_id)
     
-    # Delete file
-    filepath = os.path.join(current_app.root_path, 'src', resource.file_path.lstrip('/'))
-    if os.path.exists(filepath):
-        os.remove(filepath)
+    # Delete file from storage
+    storage = current_app.config.get('STORAGE_SERVICE', StorageService())
+    relative = storage.file_path_to_relative(resource.file_path)
+    storage.delete(relative, os.path.join(current_app.root_path, 'src', 'static', 'uploads'))
     
     db.session.delete(resource)
     db.session.commit()
@@ -225,10 +226,8 @@ def generate_ai_badge():
         # Save as resource
         import uuid
         filename = f"ai_generated_{uuid.uuid4()}.png"
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        
-        with open(filepath, 'wb') as f:
-            f.write(image_bytes)
+        storage = current_app.config.get('STORAGE_SERVICE', StorageService())
+        storage.save_bytes(image_bytes, f"uploads/{filename}", current_app.config['UPLOAD_FOLDER'])
         
         # Create resource record
         resource = Resource(
@@ -314,8 +313,8 @@ def generate_ai_frame():
         # Save processed image
         import uuid
         filename = f"ai_frame_{uuid.uuid4()}.png"
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        img.save(filepath, 'PNG')
+        storage = current_app.config.get('STORAGE_SERVICE', StorageService())
+        storage.save_pil_image(img, f"uploads/{filename}", current_app.config['UPLOAD_FOLDER'])
         
         # Create resource record
         resource = Resource(

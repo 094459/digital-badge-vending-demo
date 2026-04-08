@@ -27,8 +27,10 @@ class StrandsAgentService:
             from strands.models import BedrockModel
             
             # Initialize Bedrock model for text generation
+            # Nova 1 Pro (amazon.nova-pro-v1:0) is deprecated.
+            # Using Nova 2 Lite via Bedrock with cross-region inference prefix.
             model = BedrockModel(
-                model_id="amazon.nova-pro-v1:0",
+                model_id="global.amazon.nova-2-lite-v1:0",
                 region_name=self.region,
                 params={
                     "max_tokens": 2000,
